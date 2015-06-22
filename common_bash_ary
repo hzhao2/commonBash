@@ -1,0 +1,563 @@
+
+# _     _
+#| |   | |__ _                    _
+#| |___| /___ |   _ _    _ _   __| |
+#|  ___  | / /   / '__\ / _ \ / _  |
+#| |   | |/ /___ | |_ _| |_| | (_| |
+#|_|   |_|___ _(_)_ __/ \_ _/ \__,_|
+#
+# [common_bash_ary] (C) 1988-2014 Hz Inc.
+# 通用工具类-数组操作
+# common_bash_ary.sh
+#
+# [注明]
+#   bash 4.0以下版本不支持关联数组,出现0-9以外的下标都会以0或-1作为处理
+#   解决方法一: awk自身实现的数组是关联数组,可以考虑通过awk重构数组
+#
+#   shell目前不支持二维数组
+#   解决方法一: 通过awk实现
+#   解决方法二: 通过约定数组名称来实现二维
+#
+# [数组类函数调用方式]
+#   数组参数通过${ary[*]}方式传参
+#   eg. fun1 "${ary1[*]}" "${ary2[*]}" ...
+#   函数最终输出是以 echo "${ary[*]}"方式标准输出,如果执行异常会输出0
+#   所以调用函数并获取返回结果如下:
+#   outputAry=($(fun1 "${ary1[*]}" "${ary2[*]}"))
+#
+#!/bin/sh
+. common_bash_check.sh
+. common_bash_str.sh
+
+# 数组排序
+#
+# @param array1
+# @param sortType desc/asc default asc
+# return
+array_sort()
+{
+    if [ $(strlen "$1") == 0 ];then
+        echo 0
+        return
+    fi
+
+    local sortType="-gt"
+
+    if [ -n "$2" ]&& [ "$2" == 'desc' ];then
+        sortType="-lt"
+    fi
+
+    local paramAry=($1)
+    local len=${#paramAry[@]}
+    local temp_i=''
+    local temp_j=''
+    local temp=''
+
+    for((i=0;i<$len;i++))
+    do
+        for((j=$i;j<$len;j++))
+        do
+            temp_i=${paramAry[$i]}
+            temp_j=${paramAry[$j]}
+
+            if [ $temp_i $sortType $temp_j ];then
+                temp=${paramAry[$i]}
+                paramAry[$i]=${paramAry[$j]}
+                paramAry[$j]=$temp
+            fi
+        done
+    done
+
+    echo ${paramAry[*]}
+}
+
+# 数组排序
+#
+# @param array1
+# @param sortType desc/asc
+# return
+array_rsort()
+{
+    if [ $(check_param_num 1 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo 0
+        return
+    fi
+
+    echo $(array_sort "$1" "desc")
+}
+
+# 计算数组的差集
+#
+# @param array1
+# @param array2
+#
+# return
+array_diff()
+{
+    if [ $(check_param_num 2 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo ''
+        return
+    fi
+
+    if [ $(strlen "$2") == 0 ];then
+        echo "$1"
+        return
+    fi
+
+    local paramAry1=($1)
+    local paramAry2=($2)
+    local i=0
+    for val in ${paramAry1[*]}
+    do
+        for val2 in ${paramAry2[*]}
+        do
+            if [ $val2 == $val ];then
+                unset paramAry1[$i]
+                break
+            fi
+        done
+        ((i++))
+    done
+    echo ${paramAry1[*]}
+}
+
+# 计算数组的交集
+#
+# @param array1
+# @param array2
+#
+# return
+array_intersect()
+{
+    if [ $(check_param_num 2 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo "$2"
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo "$1"
+        return
+    fi
+
+    local paramAry1=($1)
+    local paramAry2=($2)
+    local outputAry=()
+    local len=0
+    local i=0
+    local j=0
+    for val in ${paramAry1[*]}
+    do
+        j=0
+        for val2 in ${paramAry2[*]}
+        do
+            if [ $val2 == $val ];then
+                unset paramAry1[$i]
+                unset paramAry2[$j]
+                len=${#outputAry[@]}
+                outputAry[$len]=$val
+                break
+            fi
+            ((j++))
+        done
+        ((i++))
+    done
+    echo ${outputAry[*]}
+}
+
+# 填充数组,返回数组,包含num个string元素
+#
+# @param num
+# @param string
+#
+# return
+array_fill()
+{
+    if [ $(check_param_num 2 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(is_numeric $1) == 0 ] || [ $1 -lt 1 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$2") == 0 ];then
+        echo 0
+        return
+    fi
+
+    local i=0
+    local templet=$2
+    local outputAry=()
+    until [ $i -ge $1 ]
+    do
+        outputAry[$i]=$templet
+        ((i++))
+    done
+    echo ${outputAry[*]}
+}
+
+# 过滤数组中重复的单元
+#
+# @param array
+#
+# return
+array_unique()
+{
+    if [ $(check_param_num 1 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo 0
+        return
+    fi
+
+    local paramAry=($1)
+    local len=${#paramAry[@]}
+    local outputAry=()
+    local isRepeat=false
+    for((i=0;i<$len;i++))
+    do
+        len2=${#outputAry[@]}
+        if [ $len2 -gt 0 ];then
+            isRepeat=false
+            for((j=0;j<$len2;j++))
+            do
+                if [ ${outputAry[$j]} == ${paramAry[$i]} ];then
+                    isRepeat=true
+                    break
+                fi
+            done
+
+            if [ $isRepeat == false ];then
+                outputAry[$len2]=${paramAry[$i]}
+            fi
+        else
+            outputAry[0]=${paramAry[$i]}
+        fi
+    done
+
+    echo ${outputAry[*]}
+}
+
+# 合并多个数组
+#
+# @param array1
+# @param array2
+# @param array3
+# ...
+#
+# return
+array_merge()
+{
+    local outputMsg=''
+    for i in $*
+    do
+        if [ $(strlen "$i") != 0 ];then
+            outputMsg=$outputMsg' '$i
+        fi
+    done
+
+    echo $outputMsg
+}
+
+
+# 用值将数组填补到指定长度
+#
+# @param array
+# @param pad_size
+# @param pad_value
+#
+# @todo:支持负数
+#
+# return
+array_pad()
+{
+    if [ $(check_param_num 3 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(is_numeric $2) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$3") == 0 ];then
+        echo o
+        return
+    fi
+
+    local paramAry=($1)
+    if [ ${#paramAry[@]} -ge $2 ];then
+        echo "$1"
+    fi
+    local aryLen=${#paramAry[@]}
+    local padLen=$(($2 - $aryLen))
+
+    for((i=0;i<$padLen;i++))
+    do
+        aryLen=${#paramAry[@]}
+        paramAry[$aryLen]=$3
+    done
+
+    echo ${paramAry[*]}
+}
+
+# 将数组开头一个单元弹出
+#
+# @param array
+#
+# return
+array_shift()
+{
+    if [ $(check_param_num 1 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo o
+        return
+    fi
+
+    local paramAry=($1)
+    unset paramAry[0]
+
+    echo ${paramAry[*]}
+}
+
+# 将数组最后一个单元弹出
+#
+# @param array
+#
+# return
+array_pop()
+{
+    if [ $(check_param_num 1 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo o
+        return
+    fi
+
+    local paramAry=($1)
+    local len=${#paramAry[@]}
+
+    unset paramAry[$(($len - 1 ))]
+
+    echo ${paramAry[*]}
+}
+
+# 将一个或多个单元压入数组的末尾
+#
+# @param array
+# @param string1
+# @param string2
+# ...
+#
+# return
+array_pop()
+{
+    if [ $(strlen "$1") == 0 ];then
+        echo 0
+        return
+    fi
+
+    local outputAry=()
+    local len=0
+    for i in $*
+    do
+        len=${#outputAry[@]}
+        outputAry[$len]=$i
+    done
+
+    echo ${outputAry[*]}
+}
+
+# 计算数组中所有数的乘积,异常返回0
+#
+# @param array
+#
+# return
+array_product()
+{
+    if [ $(check_param_num 1 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo 0
+        return
+    fi
+
+    local outputNum=1
+    for i in $*
+    do
+        if [ $(is_numeric $i) == 0 ] || [ $i == 0 ];then
+            echo 0
+            return
+        fi
+
+        outputNum=$(($outputNum * $i))
+    done
+
+    echo $outputNum
+}
+
+# 计算数组中所有数的之和,异常返回0
+#
+# @param array
+#
+# return
+array_sum()
+{
+    if [ $(check_param_num 1 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo 0
+        return
+    fi
+
+    local outputNum=0
+    for i in $*
+    do
+        if [ $(is_numeric $i) == 0 ];then
+            echo 0
+            return
+        fi
+
+        outputNum=$(($outputNum + $i))
+    done
+
+    echo $outputNum
+
+}
+# 数组转化为字符串
+#
+# @param array1
+#
+# return
+array_to_str()
+{
+    if [ $(check_param_num 1 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo ''
+        return
+    fi
+
+    echo "`echo "$1" | sed 's/\s//g'`"
+}
+
+# 返回一个单元顺序相反的数
+#
+# @param array
+#
+# return
+array_reverse()
+{
+    if [ $(check_param_num 1 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo ''
+        return
+    fi
+
+    local paramAry=($1)
+    local len=${#paramAry[@]}
+    local outputAry=()
+    j=0
+    for((i=$len;i>0;i--))
+    do
+        outputAry[$j]=${paramAry[$(($i - 1))]}
+        ((j++))
+    done
+
+    echo ${outputAry[@]}
+}
+
+# 从数组中取出一段数据
+#
+# @param array
+# @param offset
+# @param length
+#
+# return
+array_slice()
+{
+    if [ $(check_param_num 3 $#) == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(strlen "$1") == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(isnum "$2") == 0 ];then
+        echo 0
+        return
+    fi
+
+    if [ $(isnum "$3") == 0 ] || [ $3 == 0 ];then
+        echo 0
+        return
+    fi
+
+    local paramAry=($1)
+    echo ${paramAry[@]:$2:$3}
+}
+#testary=(1 1 1 2 3 4 5 9 10)
+#testary2=(9 1 3 4 1)
+#array_sum "${testary2[*]}"
+#tmp=($(array_diff "${testary[*]}" "${testary2[*]}"))
+
+test()
+{
+    local tmp1=($1)
+    local tmp2=($2)
+    echo ${tmp1[*]}
+    echo ${tmp2[*]}
+}
+
+#testary=(1 2 3 4 5)
+#testary2=(5 6 7 8 9)
+
+#value=([apple]='100 dollars' [orange]='150 dollars')
+#ktestary3=([9]=5 [aaaa]=6 [5]=9)
+#echo ${!value[*]}
+#test "${testary[*]}" "${testary2[*]}"
+#数组元素以空格分割
